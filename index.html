@@ -308,7 +308,7 @@
 
     let mockDB = {
         users: [
-            { id: '1', username: 'admin', password: 'edudigital', role: 'admin', nama: 'Admin Edudigital', agama: 'non-muslim', kelas: '-' },
+            { id: '1', username: 'admin', password: 'edudigital', role: 'admin', nama: 'Administrator Utama', agama: 'non-muslim', kelas: '-' },
             { id: '2', username: 'peserta', password: 'edudigital', role: 'peserta', nama: 'Siswa Muslim', agama: 'muslim', kelas: '4A' },
             { id: '3', username: 'peserta2', password: 'edudigital', role: 'peserta', nama: 'Murid Hebat', agama: 'non-muslim', kelas: '5B' }
         ],
@@ -693,8 +693,8 @@
     // Fungsi Mengunduh Template Excel Contoh
     function downloadExcelTemplate() {
         const templateData = [
-            { Nama_Lengkap: "Ahmad Zaki", Kelas: "4A", Username: "zaki4a", Password: "123", Agama: "muslim" },
-            { Nama_Lengkap: "Siti Rahma", Kelas: "4A", Username: "rahma4a", Password: "123", Agama: "muslim" },
+            { Nama_Lengkap: "Ahmad Zaki", Kelas: "1A", Username: "zaki1a", Password: "123", Agama: "muslim" },
+            { Nama_Lengkap: "Siti Rahma", Kelas: "1A", Username: "rahma1a", Password: "123", Agama: "muslim" },
             { Nama_Lengkap: "David Wijaya", Kelas: "5B", Username: "david5b", Password: "123", Agama: "non-muslim" }
         ];
         const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -704,7 +704,7 @@
         showToast("Template Excel berhasil diunduh!");
     }
 
-    // Fungsi Membaca dan Mengimpor File Excel
+    // Fungsi Membaca dan Mengimpor File Excel (Ditingkatkan agar toleran terhadap berbagai variasi nama kolom)
     async function handleExcelImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -725,15 +725,36 @@
 
                 let successCount = 0;
                 for (let row of jsonRows) {
-                    let payload = {
-                        nama: row.Nama_Lengkap || row.nama || row.Nama,
-                        kelas: row.Kelas || row.kelas || "1A",
-                        username: row.Username || row.username,
-                        password: String(row.Password || row.password || "123"),
-                        agama: (row.Agama || row.agama || "muslim").toLowerCase()
+                    // Cari nilai kolom dengan mendeteksi berbagai variasi penulisan (case-insensitive & spasi/underscore)
+                    const getVal = (keys) => {
+                        for (let k of Object.keys(row)) {
+                            let cleanKey = k.toLowerCase().replace(/[\s_]/g, '');
+                            for (let target of keys) {
+                                if (cleanKey === target.toLowerCase().replace(/[\s_]/g, '')) {
+                                    return row[k];
+                                }
+                            }
+                        }
+                        return "";
                     };
 
-                    if (payload.nama && payload.username) {
+                    let nama = getVal(["Nama_Lengkap", "NamaLengkap", "Nama"]);
+                    let kelas = getVal(["Kelas", "Class"]) || "1A";
+                    let username = getVal(["Username", "User", "ID"]);
+                    let password = String(getVal(["Password", "Pass", "Sandi"]) || "123");
+                    let agama = String(getVal(["Agama", "Religion"]) || "muslim").toLowerCase();
+
+                    // Bersihkan nama kelas (misal: ambil angkanya saja jika ada format "Kelas 1A" -> "1A")
+                    kelas = String(kelas).replace(/kelas/gi, "").trim();
+
+                    if (nama && username) {
+                        let payload = {
+                            nama: String(nama).trim(),
+                            kelas: kelas,
+                            username: String(username).trim(),
+                            password: password,
+                            agama: agama.includes("non") ? "non-muslim" : "muslim"
+                        };
                         const res = await apiCall('add_user', payload);
                         if (res.success) successCount++;
                     }
